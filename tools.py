@@ -1,20 +1,22 @@
 from langchain.tools import tool
 from tavily import TavilyClient
 
+from additional_functions import get_creds
+from googleapiclient.discovery import build
 
-
+from email.message import EmailMessage
 from dotenv import load_dotenv
 import ast
 import requests
 import operator
 import os
+import base64
 load_dotenv()
 
 tavily = TavilyClient(
     api_key = os.getenv('TAVILY_API_KEY'    )
 )
 
-gmail_session = None
 
 @tool
 def get_weather(city: str):
@@ -133,3 +135,34 @@ def calculator(expression: str):
 
 def send_mail(session,to:str,subject:str,content:str):
     """Sends an Email using Gmail"""
+
+    message = EmailMessage()
+
+    message["To"] = to
+    message["Subject"] = subject
+    message.set_content(content)
+
+    encoded_message = base64.urlsafe_b64encode(
+        message.as_bytes()
+    ).decode('utf-8')
+
+    body = {
+        'raw' : encoded_message
+    }
+
+    creds = get_creds()
+
+    service = build(
+        "gmail",
+        "v1",
+        credentials=creds
+    )
+
+    result = service.users().messages().send(
+        userId = 'me',
+        body = body
+    ).execute()
+
+    print("Email sent!")
+
+    return "Email Sent successfully"
