@@ -26,8 +26,6 @@ def agent(state: State):
             You are a helpful research assistant.
 
             Use tools when necessary.
-
-            Never send an email without human approval.
             """
         )
     ] + state["messages"]
