@@ -16,26 +16,8 @@ from additional_functions import finalize
 from additional_functions import agent
 from additional_functions import make_decision
 
-class State(TypedDict):
-    messages : Annotated[list,add_messages]
+from config import State
 
-class FinalResponse(BaseModel):
-    answer:str
-    tools_used:list[str]
-
-
-llm = ChatGoogleGenerativeAI(
-    model = "gemini-3.6-flash"
-)
-
-llm_with_tools = llm.bind_tools([
-    get_weather,
-    calculator,
-    search_web,
-    send_mail
-])
-
-llm_with_structured_output = llm.with_structured_output(FinalResponse)
 
 builder = StateGraph(State)
 
@@ -46,6 +28,7 @@ tool_node = ToolNode([
     search_web,
     send_mail
 ])
+builder.add_node('tool',tool_node)
 builder.add_node('final',finalize)
 
 builder.add_edge(START,'agent')
@@ -54,7 +37,7 @@ builder.add_conditional_edges(
     make_decision,
     {
         'final':'final',
-        'tool':'tool_node'
+        'tool':'tool'
     }
 )
 builder.add_edge('final',END)
