@@ -9,6 +9,7 @@ from tools import send_mail
 
 class State(TypedDict):
     messages : Annotated[list,add_messages]
+    approval : str
 
 class FinalResponse(BaseModel):
     answer:str

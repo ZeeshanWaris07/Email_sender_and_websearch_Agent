@@ -4,6 +4,7 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from langchain_core.messages import SystemMessage,AIMessage,HumanMessage
 from config import State
+from langgraph.types import interrupt
 import os
 
 from config import llm_with_structured_output,llm_with_tools
@@ -12,10 +13,14 @@ from config import llm_with_structured_output,llm_with_tools
 def make_decision(state:State):
     last_message = state['messages'][-1]
 
-    if last_message.tool_calls:
-        return 'tool'
+    if not last_message.tool_calls:
+        return 'final'
 
-    return 'final'
+    for call in last_message.tool_calls:
+        if call['name'] == "send_mail":
+            return 'approval'
+
+    return 'tool'
 
 
 def agent(state: State):
@@ -74,3 +79,40 @@ def finalize(state: State):
             )
         ]
     }
+
+
+def human_approval(state:State):
+
+    last_message = state['messages'][-1]
+
+    email_call = None
+
+    for call in last_message.tool_calls:
+        if call['name'] == 'send_mail':
+            email_call = call
+            break
+
+    if email_call == None:
+        return {}
+
+    args = email_call['args']
+
+    decision = interrupt({
+        'type' : 'email_approval',
+        'to' : args['to'],
+        'subject' : args['subject'],
+        'content' : args['content'],
+        'message' : "Do you approve sending this E-mail?"
+    })
+
+    return {
+        'approval' : decision
+    }
+
+
+def check_approval(state: State):
+
+    if state["approval"] == "yes":
+        return "send"
+
+    return "reject"
