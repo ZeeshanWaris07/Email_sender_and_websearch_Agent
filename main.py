@@ -8,6 +8,7 @@ from typing import Annotated,TypedDict
 from pydantic import BaseModel
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.types import Command
+from langgraph.store.memory import InMemoryStore
 
 from tools import get_weather
 from tools import calculator
@@ -56,15 +57,21 @@ builder.add_conditional_edges(
 builder.add_edge('final',END)
 builder.add_edge('tool','agent')
 
+user_id = "Zeeshan"
+thread_id = "thread1"
+
+store = InMemoryStore()
 with SqliteSaver.from_conn_string("checkpoints.db") as checkpointer:
 
     graph = builder.compile(
         checkpointer=checkpointer
+        store=store
     )
 
     config = {
         "configurable": {
-            "thread_id": "user_1"
+            "thread_id": thread_id,
+            "user_id" : user_id
         }
     }
 
