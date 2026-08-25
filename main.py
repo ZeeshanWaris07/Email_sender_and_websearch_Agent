@@ -20,6 +20,7 @@ from additional_functions import agent
 from additional_functions import make_decision
 from additional_functions import human_approval
 from additional_functions import check_approval
+from additional_functions import memory_extraction
 
 from config import State,store,user_id,thread_id
 from dataclasses import dataclass
@@ -44,6 +45,7 @@ tool_node = ToolNode([
 builder.add_node('approval',human_approval)
 builder.add_node('tool',tool_node)
 builder.add_node('final',finalize)
+builder.add_node('memory',memory_extraction)
 
 builder.add_edge(START,'agent')
 builder.add_conditional_edges(
@@ -63,7 +65,8 @@ builder.add_conditional_edges(
         'reject' : 'final'
     }
 )
-builder.add_edge('final',END)
+builder.add_edge('final','memory')
+builder.add_edge('memory',END)
 builder.add_edge('tool','agent')
 
 

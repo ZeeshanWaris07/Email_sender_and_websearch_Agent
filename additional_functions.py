@@ -7,6 +7,7 @@ from langgraph.runtime import Runtime
 from config import State
 from langgraph.types import interrupt
 import os
+import uuid
 
 from config import memory_extraction_llm,llm_with_structured_output,llm_with_tools,store,user_id,thread_id
 
@@ -134,11 +135,19 @@ def check_approval(state: State):
 
     return "reject"
 
-def memory_extraction(state:State):
+def memory_extraction(state:State,runtime,Runtime):
+
+    new_messages = state['messages'][state['memory_processed']:]
+
+    user_messages = [
+        msg
+        for msg in new_messages
+        if msg.type == 'human'
+    ]
 
     conversation = "\n".join(
         f"{msg.type}: {msg.content}"
-        for msg in state["messages"]
+        for msg in user_messages
     )
 
     message = f"""
@@ -151,3 +160,20 @@ def memory_extraction(state:State):
     Conversation:
     {conversation}
     """
+
+    response = memory_extraction_llm.invoke(message)
+
+    if response.should_store:
+
+        for memory in response.memories:
+            runtime.store.put(
+                ('users',runtime.context.user_id),
+                str(uuid.uuid4()),
+                {
+                    'text',memory
+                }
+            )
+
+    return {
+        'memory_processed' : len(state['messages'])
+    }
