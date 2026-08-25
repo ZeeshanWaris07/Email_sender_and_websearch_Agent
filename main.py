@@ -70,7 +70,7 @@ builder.add_edge('tool','agent')
 with SqliteSaver.from_conn_string("checkpoints.db") as checkpointer:
 
     graph = builder.compile(
-        checkpointer=checkpointer
+        checkpointer=checkpointer,
         store=store
     )
 
