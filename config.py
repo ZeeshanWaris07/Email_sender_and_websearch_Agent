@@ -37,22 +37,6 @@ llm_with_structured_output = llm.with_structured_output(FinalResponse)
 memory_extraction_llm = llm.with_structured_output(MemoryExtraction)
 
 user_id = "Zeeshan"
-thread_id = "thread1"
+thread_id = "thread2"
 
 store = InMemoryStore()
-
-store.put(
-    ('users', user_id),
-    'preferences',
-    {
-        'text': "Zeeshan is currently learning LangGraph"
-    }
-)
-
-store.put(
-    ('users', user_id),
-    'career',
-    {
-        'text': "I am an AI/ML Intern"
-    }
-)

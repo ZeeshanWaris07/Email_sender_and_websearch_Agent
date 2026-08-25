@@ -84,27 +84,35 @@ with SqliteSaver.from_conn_string("checkpoints.db") as checkpointer:
         }
     }
 
-    query = input("Ask Anything: ")
+    while True:
 
-    result = graph.invoke(
-        {
-            "messages": [
-                ("user", query)
-            ]
-        },
-        config,
-        context=context
-    )
+        query = input("\nAsk Anything (type 'exit' to quit): ")
 
-    state = graph.get_state(config)
-
-    if state.tasks:
-
-        answer = input("Approve this Email? ")
+        if query.lower() == "exit":
+            break
 
         result = graph.invoke(
-            Command(resume=answer),
-            config
+            {
+                "messages": [
+                    ("user", query)
+                ]
+            },
+            config,
+            context=context
         )
 
-    print(result)
+        state = graph.get_state(config)
+
+        if state.tasks:
+
+            answer = input("Approve this Email? ")
+
+            result = graph.invoke(
+                Command(resume=answer),
+                config,
+                context=context
+            )
+
+            state = graph.get_state(config)
+
+        print(result)

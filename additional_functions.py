@@ -135,9 +135,11 @@ def check_approval(state: State):
 
     return "reject"
 
-def memory_extraction(state:State,runtime,Runtime):
+def memory_extraction(state:State,runtime:Runtime):
 
-    new_messages = state['messages'][state['memory_processed']:]
+    processed = state.get("memory_processed", 0)
+
+    new_messages = state['messages'][processed:]
 
     user_messages = [
         msg
@@ -150,18 +152,33 @@ def memory_extraction(state:State,runtime,Runtime):
         for msg in user_messages
     )
 
-    message = f"""
+    prompt = f"""
     You are a memory extraction agent.
 
-    Look at the conversation between the User, AI, and Tools.
-    Extract only information about the user that is worth
+    Extract only information about the USER that is worth
     remembering for future conversations.
 
+    Do not store:
+    - temporary questions
+    - one-time requests
+    - tool results
+    - weather information
+    - casual conversation
+
+    Store things such as:
+    - preferences
+    - goals
+    - career information
+    - projects
+    - skills being learned
+    - important personal preferences
+
     Conversation:
+
     {conversation}
     """
 
-    response = memory_extraction_llm.invoke(message)
+    response = memory_extraction_llm.invoke(prompt)
 
     if response.should_store:
 
@@ -170,7 +187,7 @@ def memory_extraction(state:State,runtime,Runtime):
                 ('users',runtime.context.user_id),
                 str(uuid.uuid4()),
                 {
-                    'text',memory
+                    'text' : memory
                 }
             )
 
