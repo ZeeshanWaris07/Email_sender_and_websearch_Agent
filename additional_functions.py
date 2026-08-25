@@ -3,11 +3,12 @@ from googleapiclient.discovery import build
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from langchain_core.messages import SystemMessage,AIMessage,HumanMessage
+from langgraph.runtime import Runtime
 from config import State
 from langgraph.types import interrupt
 import os
 
-from config import llm_with_structured_output,llm_with_tools
+from config import llm_with_structured_output,llm_with_tools,store,user_id,thread_id
 
 
 def make_decision(state:State):
@@ -23,26 +24,42 @@ def make_decision(state:State):
     return 'tool'
 
 
-def agent(state: State):
+def agent(state: State,runtime:Runtime):
+
+
+    user = runtime.context['user_id']
+
+    memories = store.search(
+        ('users',user_id)
+    )
+
+    memory_text = "\n".join(
+        str(memory.value)
+        for memory in memories
+    )
 
     messages = [
         SystemMessage(
-            content="""
+            content=f"""
             You are a helpful research assistant.
 
             Use tools when necessary.
+
+            User extracted memories from previous conversations : 
+            {memory_text}
             """
         )
-    ] + state["messages"]
+    ] + state["messages"] 
 
     response = llm_with_tools.invoke(messages)
 
-    print("\n--- TOOL CALLS ---")
+    if response.tool_calls:
+        print("\n--- TOOL CALLS ---")
 
-    for call in response.tool_calls:
-        print("Tool:", call["name"])
-        print("Arguments:", call["args"])
-        print("ID:", call["id"])
+        for call in response.tool_calls:
+            print("Tool:", call["name"])
+            print("Arguments:", call["args"])
+            print("ID:", call["id"])
 
     return {
         "messages": [response]

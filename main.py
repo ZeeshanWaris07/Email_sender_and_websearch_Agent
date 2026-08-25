@@ -21,7 +21,16 @@ from additional_functions import make_decision
 from additional_functions import human_approval
 from additional_functions import check_approval
 
-from config import State
+from config import State,store,user_id,thread_id
+from dataclasses import dataclass
+
+@dataclass
+class Context:
+    user_id:str
+
+context = Context(
+    user_id=user_id
+)
 
 builder = StateGraph(State)
 
@@ -57,10 +66,7 @@ builder.add_conditional_edges(
 builder.add_edge('final',END)
 builder.add_edge('tool','agent')
 
-user_id = "Zeeshan"
-thread_id = "thread1"
 
-store = InMemoryStore()
 with SqliteSaver.from_conn_string("checkpoints.db") as checkpointer:
 
     graph = builder.compile(
@@ -83,7 +89,8 @@ with SqliteSaver.from_conn_string("checkpoints.db") as checkpointer:
                 ("user", query)
             ]
         },
-        config
+        config,
+        context=context
     )
 
     state = graph.get_state(config)

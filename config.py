@@ -2,6 +2,7 @@ from typing import TypedDict,Annotated
 from pydantic import BaseModel
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph.message import add_messages
+from langgraph.memory.store import InMemoryStore
 from tools import get_weather
 from tools import calculator
 from tools import search_web
@@ -28,3 +29,25 @@ llm_with_tools = llm.bind_tools([
 ])
 
 llm_with_structured_output = llm.with_structured_output(FinalResponse)
+
+
+user_id = "Zeeshan"
+thread_id = "thread1"
+
+store = InMemoryStore()
+
+store.put(
+    ('users', user_id),
+    'preferences',
+    {
+        'text': "Zeeshan is currently learning LangGraph"
+    }
+)
+
+store.put(
+    ('users', user_id),
+    'career',
+    {
+        'text': "I am an AI/ML Intern"
+    }
+)
