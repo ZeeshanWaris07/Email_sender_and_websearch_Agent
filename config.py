@@ -7,6 +7,7 @@ from tools import get_weather
 from tools import calculator
 from tools import search_web
 from tools import send_mail
+from langgraph.store.postgres import PostgresStore
 
 class State(TypedDict):
     messages : Annotated[list,add_messages]
@@ -38,5 +39,3 @@ memory_extraction_llm = llm.with_structured_output(MemoryExtraction)
 
 user_id = "Zeeshan"
 thread_id = "thread2"
-
-store = InMemoryStore()

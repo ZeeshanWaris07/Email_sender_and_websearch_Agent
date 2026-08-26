@@ -9,7 +9,7 @@ from langgraph.types import interrupt
 import os
 import uuid
 
-from config import memory_extraction_llm,llm_with_structured_output,llm_with_tools,store,user_id,thread_id
+from config import memory_extraction_llm,llm_with_structured_output,llm_with_tools,user_id,thread_id
 
 
 def make_decision(state:State):
@@ -30,7 +30,7 @@ def agent(state: State,runtime:Runtime):
 
     user = runtime.context.user_id
 
-    memories = store.search(
+    memories = runtime.store.search(
         ('users',user_id)
     )
 

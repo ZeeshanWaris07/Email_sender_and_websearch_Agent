@@ -8,7 +8,7 @@ from typing import Annotated,TypedDict
 from pydantic import BaseModel
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.types import Command
-from langgraph.store.memory import InMemoryStore
+from langgraph.store.postgres import PostgresStore
 
 from tools import get_weather
 from tools import calculator
@@ -22,8 +22,13 @@ from additional_functions import human_approval
 from additional_functions import check_approval
 from additional_functions import memory_extraction
 
-from config import State,store,user_id,thread_id
+from config import State,user_id,thread_id
 from dataclasses import dataclass
+
+import os
+
+
+DB_UTL = os.getenv('DB_UTL')
 
 @dataclass
 class Context:
@@ -70,49 +75,54 @@ builder.add_edge('memory',END)
 builder.add_edge('tool','agent')
 
 
-with SqliteSaver.from_conn_string("checkpoints.db") as checkpointer:
+with PostgresStore.from_conn_string(DB_UTL) as store:
 
-    graph = builder.compile(
-        checkpointer=checkpointer,
-        store=store
-    )
+    store.setup()
 
-    config = {
-        "configurable": {
-            "thread_id": thread_id,
-            "user_id" : user_id
-        }
-    }
 
-    while True:
-
-        query = input("\nAsk Anything (type 'exit' to quit): ")
-
-        if query.lower() == "exit":
-            break
-
-        result = graph.invoke(
-            {
-                "messages": [
-                    ("user", query)
-                ]
-            },
-            config,
-            context=context
+    with SqliteSaver.from_conn_string("checkpoints.db") as checkpointer:
+    
+        graph = builder.compile(
+            checkpointer=checkpointer,
+            store=store
         )
-
-        state = graph.get_state(config)
-
-        if state.tasks:
-
-            answer = input("Approve this Email? ")
-
+    
+        config = {
+            "configurable": {
+                "thread_id": thread_id,
+                "user_id" : user_id
+            }
+        }
+    
+        while True:
+        
+            query = input("\nAsk Anything (type 'exit' to quit): ")
+    
+            if query.lower() == "exit":
+                break
+            
             result = graph.invoke(
-                Command(resume=answer),
+                {
+                    "messages": [
+                        ("user", query)
+                    ]
+                },
                 config,
                 context=context
             )
-
+    
             state = graph.get_state(config)
-
-        print(result)
+    
+            if state.tasks:
+            
+                answer = input("Approve this Email? ")
+    
+                result = graph.invoke(
+                    Command(resume=answer),
+                    config,
+                    context=context
+                )
+    
+                state = graph.get_state(config)
+    
+            print(result)
