@@ -13,6 +13,7 @@ class State(TypedDict):
     messages : Annotated[list,add_messages]
     approval : str
     memory_processed:int
+    final_response:dict
 
 class FinalResponse(BaseModel):
     answer:str

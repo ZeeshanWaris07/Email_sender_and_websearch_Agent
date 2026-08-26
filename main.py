@@ -132,4 +132,7 @@ with PostgresStore.from_conn_string(DB_UTL) as store:
     
                 state = graph.get_state(config)
     
-            print(result)
+            response = result["final_response"]
+
+            print(f"AI : {response['answer']}")
+            print(f"Tools used : {response['tools_used']}")

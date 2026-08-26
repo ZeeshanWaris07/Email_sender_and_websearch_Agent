@@ -95,7 +95,8 @@ def finalize(state: State):
             AIMessage(
                 content=response.answer
             )
-        ]
+        ],
+        'final_response' : response.model_dump()
     }
 
 
