@@ -77,6 +77,13 @@ builder.add_edge('tool','agent')
 
 with PostgresStore.from_conn_string(DB_UTL) as store:
 
+    memories = store.search(
+        ('users',user_id)
+    )
+
+    for memory in memories:
+        print(memory.value)
+
     store.setup()
 
 
