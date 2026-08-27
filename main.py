@@ -37,6 +37,8 @@ class Context:
     user_id:str
     tool_call_history:list
     repeated_tools:bool
+    num_iterations:int
+    limit_reached:bool
 
 builder = StateGraph(State)
 
@@ -72,7 +74,6 @@ builder.add_conditional_edges(
         'reject' : 'final'
     }
 )
-builder.add_edge('loop_limit','final')
 builder.add_edge('final','memory')
 builder.add_edge('memory',END)
 builder.add_edge('tool','agent')
@@ -116,7 +117,9 @@ with PostgresStore.from_conn_string(DB_UTL) as store:
             context = Context(
                 user_id=user_id,
                 tool_call_history=[],
-                repeated_tools=False
+                repeated_tools=False,
+                num_iterations=0,
+                limit_reached=False
             )
 
             try:

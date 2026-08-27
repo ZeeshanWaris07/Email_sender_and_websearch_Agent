@@ -15,15 +15,16 @@ MAX_ITERATIONS = 5
 
 def make_decision(state:State,runtime:Runtime):
 
-    iterations = state.get('num_iterations',0)
+    iterations = runtime.context.iterations
 
     repeated_calls = runtime.context.repeated_tools
 
     if repeated_calls:
         return 'final'
 
-    if iterations > 5 :
-        return 'loop_limit'
+    if iterations > MAX_ITERATIONS :
+        runtime.context.limit_reached = True
+        return 'final'
 
     else:
         last_message = state['messages'][-1]
@@ -40,9 +41,7 @@ def make_decision(state:State,runtime:Runtime):
 
 def agent(state: State,runtime:Runtime):
 
-    iterations = state.get('num_iterations',0)
-
-    iterations += 1
+    runtime.context.iterations += 1
 
     user = runtime.context.user_id
 
@@ -69,8 +68,6 @@ def agent(state: State,runtime:Runtime):
     ] + state["messages"] 
 
     response = llm_with_tools.invoke(messages)
-
-    repeated_tool = False
 
     history = runtime.context.tool_call_history
 
@@ -99,18 +96,18 @@ def agent(state: State,runtime:Runtime):
 
     return {
         "messages": [response],
-        'num_iterations' : iterations,
     }
 
     
-def finalize(state: State):
+def finalize(state: State, runtime: Runtime):
 
-    loop_flag = state.get('limit_reached',False)
-
-    if loop_flag:
+    if runtime.context.limit_reached:
 
         response = FinalResponse(
-            answer="I wasn't able to complete the request within the allowed number of steps.",
+            answer=(
+                "I wasn't able to complete the request within "
+                "the allowed number of steps."
+            ),
             tools_used=[]
         )
 
@@ -121,37 +118,54 @@ def finalize(state: State):
             "final_response": response.model_dump()
         }
 
-    else:
-        messages = [
-            SystemMessage(
-                content="""
-                You are a helpful research assistant.
 
-                Give the user a clear and concise final answer.
+    if runtime.context.repeated_tool_call:
 
-                Use the information from the conversation and tool results.
-
-                Do not mention internal tool calls, LangGraph, MCP,
-                or implementation details.
-                """
-            )
-        ] + state["messages"] + [
-            HumanMessage(
-                content="Now provide the final answer to the user's request."
-            )
-        ]
-
-        response = llm_with_structured_output.invoke(messages)
+        response = FinalResponse(
+            answer=(
+                "I stopped because the agent attempted to "
+                "repeat the same tool operation."
+            ),
+            tools_used=[]
+        )
 
         return {
             "messages": [
-                AIMessage(
-                    content=response.answer
-                )
+                AIMessage(content=response.answer)
             ],
-            'final_response' : response.model_dump()
+            "final_response": response.model_dump()
         }
 
+
+    messages = [
+        SystemMessage(
+            content="""
+            You are a helpful research assistant.
+
+            Give the user a clear and concise final answer.
+
+            Use the information from the conversation and tool results.
+
+            Do not mention internal tool calls, LangGraph, MCP,
+            or implementation details.
+            """
+        )
+    ] + state["messages"] + [
+        HumanMessage(
+            content="Now provide the final answer to the user's request."
+        )
+    ]
+
+    response = llm_with_structured_output.invoke(messages)
+
+    return {
+        "messages": [
+            AIMessage(
+                content=response.answer
+            )
+        ],
+        "final_response": response.model_dump()
+    }
 
 def human_approval(state:State):
 
@@ -247,10 +261,4 @@ def memory_extraction(state:State,runtime:Runtime):
 
     return {
         'memory_processed' : len(state['messages'])
-    }
-
-def loop_limit(state:State):
-
-    return {
-        'loop_limit' : True
     }
