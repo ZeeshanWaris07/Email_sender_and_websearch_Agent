@@ -13,9 +13,14 @@ from config import memory_extraction_llm,llm_with_structured_output,llm_with_too
 
 MAX_ITERATIONS = 5
 
-def make_decision(state:State):
+def make_decision(state:State,runtime:Runtime):
 
     iterations = state.get('num_iterations',0)
+
+    repeated_calls = runtime.context.repeated_tools
+
+    if repeated_calls:
+        return 'final'
 
     if iterations > 5 :
         return 'loop_limit'
@@ -42,7 +47,7 @@ def agent(state: State,runtime:Runtime):
     user = runtime.context.user_id
 
     memories = runtime.store.search(
-        ('users',user_id)
+        ('users',user)
     )
 
     memory_text = "\n".join(
@@ -65,17 +70,36 @@ def agent(state: State,runtime:Runtime):
 
     response = llm_with_tools.invoke(messages)
 
+    repeated_tool = False
+
+    history = runtime.context.tool_call_history
+
     if response.tool_calls:
+
         print("\n--- TOOL CALLS ---")
 
         for call in response.tool_calls:
+
+            tool_name = call['name']
+            tool_args = call['args']
+
+            tool_signature = (
+                tool_name,
+                str(sorted(tool_args.items()))
+            )
+
+            if tool_signature in history:
+                runtime.context.repeated_tool = True
+            else:
+                runtime.context.tool_call_history.append(tool_signature)
+
             print("Tool:", call["name"])
             print("Arguments:", call["args"])
             print("ID:", call["id"])
 
     return {
         "messages": [response],
-        'num_iterations' : iterations
+        'num_iterations' : iterations,
     }
 
     

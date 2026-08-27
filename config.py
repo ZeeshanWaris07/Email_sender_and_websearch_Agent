@@ -16,6 +16,7 @@ class State(TypedDict):
     final_response:dict
     num_iterations:int
     limit_reached:bool
+    repeated_tools:bool
 
 class FinalResponse(BaseModel):
     answer:str

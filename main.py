@@ -35,10 +35,8 @@ DB_UTL = os.getenv('DB_UTL')
 @dataclass
 class Context:
     user_id:str
-
-context = Context(
-    user_id=user_id
-)
+    tool_call_history:list
+    repeated_tools:bool
 
 builder = StateGraph(State)
 
@@ -111,9 +109,15 @@ with PostgresStore.from_conn_string(DB_UTL) as store:
         while True:
             
             query = input("\nAsk Anything (type 'exit' to quit): ")
-    
+
             if query.lower() == "exit":
                 break
+
+            context = Context(
+                user_id=user_id,
+                tool_call_history=[],
+                repeated_tools=False
+            )
 
             try:
             
