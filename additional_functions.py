@@ -11,22 +11,33 @@ import uuid
 
 from config import memory_extraction_llm,llm_with_structured_output,llm_with_tools,user_id,thread_id
 
+MAX_ITERATIONS = 5
 
 def make_decision(state:State):
-    last_message = state['messages'][-1]
 
-    if not last_message.tool_calls:
-        return 'final'
+    iterations = state.get('num_iterations',0)
 
-    for call in last_message.tool_calls:
-        if call['name'] == "send_mail":
-            return 'approval'
+    if iterations > 5 :
+        return 'loop_limit'
 
-    return 'tool'
+    else:
+        last_message = state['messages'][-1]
+
+        if not last_message.tool_calls:
+            return 'final'
+
+        for call in last_message.tool_calls:
+            if call['name'] == "send_mail":
+                return 'approval'
+
+        return 'tool'
 
 
 def agent(state: State,runtime:Runtime):
 
+    iterations = state.get('num_iterations',0)
+
+    iterations += 1
 
     user = runtime.context.user_id
 
@@ -63,7 +74,8 @@ def agent(state: State,runtime:Runtime):
             print("ID:", call["id"])
 
     return {
-        "messages": [response]
+        "messages": [response],
+        'num_iterations' : iterations
     }
 
     
@@ -194,4 +206,10 @@ def memory_extraction(state:State,runtime:Runtime):
 
     return {
         'memory_processed' : len(state['messages'])
+    }
+
+def loop_limit(state:State):
+
+    return {
+        'loop_limit' : True
     }
