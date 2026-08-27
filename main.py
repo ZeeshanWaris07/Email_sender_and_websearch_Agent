@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.types import Command
 from langgraph.store.postgres import PostgresStore
+from langgraph.errors import GraphRecursionError
 
 from tools import get_weather
 from tools import calculator
@@ -73,6 +74,7 @@ builder.add_conditional_edges(
         'reject' : 'final'
     }
 )
+builder.add_edge('loop_limit','final')
 builder.add_edge('final','memory')
 builder.add_edge('memory',END)
 builder.add_edge('tool','agent')
@@ -101,41 +103,49 @@ with PostgresStore.from_conn_string(DB_UTL) as store:
             "configurable": {
                 "thread_id": thread_id,
                 "user_id" : user_id
-            }
+            },
+            'recursion_limit' : 10
         }
     
         while True:
-        
+            
             query = input("\nAsk Anything (type 'exit' to quit): ")
     
             if query.lower() == "exit":
                 break
+
+            try:
             
-            result = graph.invoke(
-                {
-                    "messages": [
-                        ("user", query)
-                    ]
-                },
-                config,
-                context=context
-            )
-    
-            state = graph.get_state(config)
-    
-            if state.tasks:
-            
-                answer = input("Approve this Email? ")
-    
                 result = graph.invoke(
-                    Command(resume=answer),
+                    {
+                        "messages": [
+                            ("user", query)
+                        ]
+                    },
                     config,
                     context=context
                 )
-    
-                state = graph.get_state(config)
-    
-            response = result["final_response"]
 
-            print(f"AI : {response['answer']}")
-            print(f"Tools used : {response['tools_used']}")
+                state = graph.get_state(config)
+
+                if state.tasks:
+                
+                    answer = input("Approve this Email? ")
+
+                    result = graph.invoke(
+                        Command(resume=answer),
+                        config,
+                        context=context
+                    )
+
+                    state = graph.get_state(config)
+
+                response = result["final_response"]
+
+                print(f"AI : {response['answer']}")
+                print(f"Tools used : {response['tools_used']}")
+
+            except GraphRecursionError:
+
+                print("\nAI : I wasn't able to complete the request within")
+                print("     the allowed number of steps.")
