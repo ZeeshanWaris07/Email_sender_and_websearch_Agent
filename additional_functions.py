@@ -4,7 +4,7 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from langchain_core.messages import SystemMessage,AIMessage,HumanMessage
 from langgraph.runtime import Runtime
-from config import State
+from config import State,FinalResponse
 from langgraph.types import interrupt
 import os
 import uuid
@@ -81,35 +81,52 @@ def agent(state: State,runtime:Runtime):
     
 def finalize(state: State):
 
-    messages = [
-        SystemMessage(
-            content="""
-            You are a helpful research assistant.
+    loop_flag = state.get('limit_reached',False)
 
-            Give the user a clear and concise final answer.
+    if loop_flag:
 
-            Use the information from the conversation and tool results.
-
-            Do not mention internal tool calls, LangGraph, MCP,
-            or implementation details.
-            """
+        response = FinalResponse(
+            answer="I wasn't able to complete the request within the allowed number of steps.",
+            tools_used=[]
         )
-    ] + state["messages"] + [
-        HumanMessage(
-            content="Now provide the final answer to the user's request."
-        )
-    ]
 
-    response = llm_with_structured_output.invoke(messages)
+        return {
+            "messages": [
+                AIMessage(content=response.answer)
+            ],
+            "final_response": response.model_dump()
+        }
 
-    return {
-        "messages": [
-            AIMessage(
-                content=response.answer
+    else:
+        messages = [
+            SystemMessage(
+                content="""
+                You are a helpful research assistant.
+
+                Give the user a clear and concise final answer.
+
+                Use the information from the conversation and tool results.
+
+                Do not mention internal tool calls, LangGraph, MCP,
+                or implementation details.
+                """
             )
-        ],
-        'final_response' : response.model_dump()
-    }
+        ] + state["messages"] + [
+            HumanMessage(
+                content="Now provide the final answer to the user's request."
+            )
+        ]
+
+        response = llm_with_structured_output.invoke(messages)
+
+        return {
+            "messages": [
+                AIMessage(
+                    content=response.answer
+                )
+            ],
+            'final_response' : response.model_dump()
+        }
 
 
 def human_approval(state:State):
