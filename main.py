@@ -82,14 +82,15 @@ builder.add_edge('tool','agent')
 
 with PostgresStore.from_conn_string(DB_UTL) as store:
 
+
+    store.setup()
+
     memories = store.search(
         ('users',user_id)
     )
 
     for memory in memories:
         print(memory.value)
-
-    store.setup()
 
 
     with SqliteSaver.from_conn_string("checkpoints.db") as checkpointer:
