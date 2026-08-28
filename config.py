@@ -1,4 +1,4 @@
-from typing import TypedDict,Annotated
+from typing import TypedDict,Annotated,Literal
 from pydantic import BaseModel
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph.message import add_messages
@@ -22,6 +22,18 @@ class FinalResponse(BaseModel):
 class MemoryExtraction(BaseModel):
     should_store:bool
     memories:list[str]
+
+class ToolError(BaseModel):
+    error_type: Literal[
+        "temporary",
+        "invalid_arguments",
+        "permission",
+        "not_found",
+        "unknown"
+    ]
+
+    message: str
+    retryable: bool
 
 llm = ChatGoogleGenerativeAI(
     model = "gemini-3.6-flash"

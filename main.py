@@ -23,6 +23,7 @@ from additional_functions import human_approval
 from additional_functions import check_approval
 from additional_functions import memory_extraction
 from additional_functions import handle_tool_result
+from additional_functions import handle_tool_error
 
 from config import State,user_id,thread_id
 from dataclasses import dataclass,field
@@ -50,7 +51,7 @@ tool_node = ToolNode([
     search_web,
     send_mail
 ],
-handle_tool_errors = True
+handle_tool_errors = handle_tool_error
 )
 builder.add_node('approval',human_approval)
 builder.add_node('tool',tool_node)

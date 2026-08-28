@@ -4,7 +4,7 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from langchain_core.messages import SystemMessage,AIMessage,HumanMessage
 from langgraph.runtime import Runtime
-from config import State,FinalResponse
+from config import State,FinalResponse,ToolError
 from langgraph.types import interrupt
 import os
 import uuid
@@ -21,39 +21,58 @@ def handle_tool_result(state: State, runtime: Runtime):
     if last_message.type != "tool":
         return "agent"
 
+    content = str(last_message.content)
+
     history = runtime.context.tool_call_history
 
     if not history:
         return "agent"
 
-
+    # Most recent tool call
     latest_call = history[-1]
 
-    content = str(last_message.content)
+    try:
+        error = ToolError.model_validate_json(content)
 
-    if "error" in content.lower():
+    except Exception:
 
-        latest_call["status"] = "failed"
+        # No structured error means the tool succeeded
 
-        runtime.context.retry_count += 1
+        latest_call["status"] = "success"
 
-        print(
-            f"\nTool failed."
-            f" Retry {runtime.context.retry_count}/{MAX_RETRIES}"
-        )
-
-        if runtime.context.retry_count >= MAX_RETRIES:
-
-            runtime.context.limit_reached = True
-
-            return "final"
+        runtime.context.retry_count = 0
 
         return "agent"
 
 
-    latest_call["status"] = "success"
+    latest_call["status"] = "failed"
 
-    runtime.context.retry_count = 0
+    print(
+        f"\nTool failed:"
+        f"\nType: {error.error_type}"
+        f"\nMessage: {error.message}"
+        f"\nRetryable: {error.retryable}"
+    )
+
+    # Don't retry non-retryable errors
+    if not error.retryable:
+
+        runtime.context.retry_count = 0
+
+        return "agent"
+
+    # Retryable error
+    runtime.context.retry_count += 1
+
+    print(
+        f"Retry {runtime.context.retry_count}/{MAX_RETRIES}"
+    )
+
+    if runtime.context.retry_count >= MAX_RETRIES:
+
+        runtime.context.limit_reached = True
+
+        return "final"
 
     return "agent"
 
@@ -322,3 +341,27 @@ def memory_extraction(state:State,runtime:Runtime):
     return {
         'memory_processed' : len(state['messages'])
     }
+
+def handle_tool_error(error: Exception) -> str:
+
+    if isinstance(error, TimeoutError):
+
+        return ToolError(
+            error_type="temporary",
+            message=str(error),
+            retryable=True
+        ).model_dump_json()
+
+    if isinstance(error, ValueError):
+
+        return ToolError(
+            error_type="invalid_arguments",
+            message=str(error),
+            retryable=False
+        ).model_dump_json()
+
+    return ToolError(
+        error_type="unknown",
+        message=str(error),
+        retryable=False
+    ).model_dump_json()
