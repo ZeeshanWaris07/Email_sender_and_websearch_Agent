@@ -30,6 +30,36 @@ from dataclasses import dataclass,field
 
 import os
 
+def display_event(event):
+
+    for node_name, node_output in event.items():
+
+        print(f"\n[{node_name.upper()}]")
+
+        if not isinstance(node_output, dict):
+            print(node_output)
+            continue
+
+        messages = node_output.get("messages", [])
+
+        for message in messages:
+
+            if message.type == "ai":
+
+                if message.tool_calls:
+
+                    for call in message.tool_calls:
+
+                        print(f"Tool: {call['name']}")
+                        print(f"Arguments: {call['args']}")
+
+                elif message.content:
+
+                    print(f"AI: {message.content}")
+
+            elif message.type == "tool":
+
+                print(f"Tool Result: {message.content}")
 
 DB_UTL = os.getenv('DB_UTL')
 
@@ -128,30 +158,33 @@ with PostgresStore.from_conn_string(DB_UTL) as store:
             )
 
             try:
-            
-                result = graph.invoke(
+
+                result = None
+
+                for event in graph.stream(
                     {
-                        "messages": [
-                            ("user", query)
+                        'messages' : [
+                            ('user',query)
                         ]
                     },
                     config,
                     context=context
-                )
+                ):
+                    
+                    display_event(event)
 
                 state = graph.get_state(config)
-
+                result = state.values
                 if state.tasks:
                 
                     answer = input("Approve this Email? ")
 
-                    result = graph.invoke(
+                    for event in graph.stream(
                         Command(resume=answer),
                         config,
                         context=context
-                    )
-
-                    state = graph.get_state(config)
+                    ):
+                        display_event(event)
 
                 response = result["final_response"]
 
