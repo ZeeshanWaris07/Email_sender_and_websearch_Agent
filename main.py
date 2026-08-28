@@ -23,6 +23,7 @@ from additional_functions import human_approval
 from additional_functions import check_approval
 from additional_functions import memory_extraction
 from additional_functions import loop_limit
+from additional_functions import handle_tool_results
 
 from config import State,user_id,thread_id
 from dataclasses import dataclass
@@ -39,6 +40,7 @@ class Context:
     repeated_tools:bool
     num_iterations:int
     limit_reached:bool
+    retry_count:int
 
 builder = StateGraph(State)
 
@@ -48,7 +50,9 @@ tool_node = ToolNode([
     calculator,
     search_web,
     send_mail
-])
+],
+handle_tool_errors = True
+)
 builder.add_node('approval',human_approval)
 builder.add_node('tool',tool_node)
 builder.add_node('final',finalize)
@@ -76,7 +80,15 @@ builder.add_conditional_edges(
 )
 builder.add_edge('final','memory')
 builder.add_edge('memory',END)
-builder.add_edge('tool','agent')
+builder.add_conditional_edges(
+    'tool',
+    handle_tool_results,
+    {
+        'continue' : 'agent',
+        'retry' : 'agent',
+        'final' : 'final'
+    }
+)
 
 
 with PostgresStore.from_conn_string(DB_UTL) as store:
@@ -119,7 +131,8 @@ with PostgresStore.from_conn_string(DB_UTL) as store:
                 tool_call_history=[],
                 repeated_tools=False,
                 num_iterations=0,
-                limit_reached=False
+                limit_reached=,
+                retry_count=0
             )
 
             try:

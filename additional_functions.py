@@ -12,6 +12,24 @@ import uuid
 from config import memory_extraction_llm,llm_with_structured_output,llm_with_tools,user_id,thread_id
 
 MAX_ITERATIONS = 5
+MAX_RETRIES = 3
+
+def handle_tool_results(state:State,runtime:Runtime):
+
+    last_message = state['messages'][-1]
+
+    if last_message.type != "tool":
+        return 'continue'
+
+    if "error" not in str(last_message.content).lower():
+        return 'continue'
+
+    runtime.context.retry_count += 1
+
+    if runtime.context.retry_count > MAX_RETRIES:
+        return 'final'
+
+    return 'retry'
 
 def make_decision(state:State,runtime:Runtime):
 
