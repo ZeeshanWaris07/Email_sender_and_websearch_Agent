@@ -26,7 +26,7 @@ from additional_functions import loop_limit
 from additional_functions import handle_tool_results
 
 from config import State,user_id,thread_id
-from dataclasses import dataclass
+from dataclasses import dataclass,field
 
 import os
 
@@ -35,12 +35,12 @@ DB_UTL = os.getenv('DB_UTL')
 
 @dataclass
 class Context:
-    user_id:str
-    tool_call_history:list
-    repeated_tools:bool
-    num_iterations:int
-    limit_reached:bool
-    retry_count:int
+    user_id: str
+    tool_call_history: list[dict] = field(default_factory=list)
+    repeated_tools: bool = False
+    num_iterations: int = 0
+    limit_reached: bool = False
+    retry_count: int = 0
 
 builder = StateGraph(State)
 
@@ -84,8 +84,7 @@ builder.add_conditional_edges(
     'tool',
     handle_tool_results,
     {
-        'continue' : 'agent',
-        'retry' : 'agent',
+        'agent' : 'agent',
         'final' : 'final'
     }
 )
@@ -128,11 +127,6 @@ with PostgresStore.from_conn_string(DB_UTL) as store:
 
             context = Context(
                 user_id=user_id,
-                tool_call_history=[],
-                repeated_tools=False,
-                num_iterations=0,
-                limit_reached=,
-                retry_count=0
             )
 
             try:

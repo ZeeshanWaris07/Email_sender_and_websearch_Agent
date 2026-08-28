@@ -14,22 +14,48 @@ from config import memory_extraction_llm,llm_with_structured_output,llm_with_too
 MAX_ITERATIONS = 5
 MAX_RETRIES = 3
 
-def handle_tool_results(state:State,runtime:Runtime):
+def handle_tool_result(state: State, runtime: Runtime):
 
-    last_message = state['messages'][-1]
+    last_message = state["messages"][-1]
 
     if last_message.type != "tool":
-        return 'continue'
+        return "agent"
 
-    if "error" not in str(last_message.content).lower():
-        return 'continue'
+    history = runtime.context.tool_call_history
 
-    runtime.context.retry_count += 1
+    if not history:
+        return "agent"
 
-    if runtime.context.retry_count > MAX_RETRIES:
-        return 'final'
 
-    return 'retry'
+    latest_call = history[-1]
+
+    content = str(last_message.content)
+
+    if "error" in content.lower():
+
+        latest_call["status"] = "failed"
+
+        runtime.context.retry_count += 1
+
+        print(
+            f"\nTool failed."
+            f" Retry {runtime.context.retry_count}/{MAX_RETRIES}"
+        )
+
+        if runtime.context.retry_count >= MAX_RETRIES:
+
+            runtime.context.limit_reached = True
+
+            return "final"
+
+        return "agent"
+
+
+    latest_call["status"] = "success"
+
+    runtime.context.retry_count = 0
+
+    return "agent"
 
 def make_decision(state:State,runtime:Runtime):
 
@@ -57,14 +83,14 @@ def make_decision(state:State,runtime:Runtime):
         return 'tool'
 
 
-def agent(state: State,runtime:Runtime):
+def agent(state: State, runtime: Runtime):
 
-    runtime.context.iterations += 1
+    runtime.context.num_iterations += 1
 
     user = runtime.context.user_id
 
     memories = runtime.store.search(
-        ('users',user)
+        ("users", user)
     )
 
     memory_text = "\n".join(
@@ -79,11 +105,11 @@ def agent(state: State,runtime:Runtime):
 
             Use tools when necessary.
 
-            User extracted memories from previous conversations : 
+            User extracted memories from previous conversations:
             {memory_text}
             """
         )
-    ] + state["messages"] 
+    ] + state["messages"]
 
     response = llm_with_tools.invoke(messages)
 
@@ -95,25 +121,41 @@ def agent(state: State,runtime:Runtime):
 
         for call in response.tool_calls:
 
-            tool_name = call['name']
-            tool_args = call['args']
+            tool_name = call["name"]
+            tool_args = call["args"]
 
             tool_signature = (
                 tool_name,
                 str(sorted(tool_args.items()))
             )
 
-            if tool_signature in history:
-                runtime.context.repeated_tool = True
-            else:
-                runtime.context.tool_call_history.append(tool_signature)
+            # Check previous calls
+            for item in history:
 
-            print("Tool:", call["name"])
-            print("Arguments:", call["args"])
+                if item["signature"] == tool_signature:
+
+                    if item["status"] == "success":
+                        runtime.context.repeated_tool_call = True
+
+                    # Failed calls are allowed to retry
+                    break
+
+            else:
+
+                # New tool call
+                history.append(
+                    {
+                        "signature": tool_signature,
+                        "status": "pending"
+                    }
+                )
+
+            print("Tool:", tool_name)
+            print("Arguments:", tool_args)
             print("ID:", call["id"])
 
     return {
-        "messages": [response],
+        "messages": [response]
     }
 
     
