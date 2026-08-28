@@ -22,8 +22,7 @@ from additional_functions import make_decision
 from additional_functions import human_approval
 from additional_functions import check_approval
 from additional_functions import memory_extraction
-from additional_functions import loop_limit
-from additional_functions import handle_tool_results
+from additional_functions import handle_tool_result
 
 from config import State,user_id,thread_id
 from dataclasses import dataclass,field
@@ -57,7 +56,6 @@ builder.add_node('approval',human_approval)
 builder.add_node('tool',tool_node)
 builder.add_node('final',finalize)
 builder.add_node('memory',memory_extraction)
-builder.add_node('loop_limit',loop_limit)
 
 builder.add_edge(START,'agent')
 builder.add_conditional_edges(
@@ -66,8 +64,7 @@ builder.add_conditional_edges(
     {
         'final':'final',
         'tool':'tool',
-        'approval' : 'approval',
-        'loop_limit' : 'loop_limit'
+        'approval' : 'approval'
     }
 )
 builder.add_conditional_edges(
@@ -82,7 +79,7 @@ builder.add_edge('final','memory')
 builder.add_edge('memory',END)
 builder.add_conditional_edges(
     'tool',
-    handle_tool_results,
+    handle_tool_result,
     {
         'agent' : 'agent',
         'final' : 'final'

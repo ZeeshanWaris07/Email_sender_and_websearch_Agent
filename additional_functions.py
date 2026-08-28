@@ -59,7 +59,7 @@ def handle_tool_result(state: State, runtime: Runtime):
 
 def make_decision(state:State,runtime:Runtime):
 
-    iterations = runtime.context.iterations
+    iterations = runtime.context.num_iterations
 
     repeated_calls = runtime.context.repeated_tools
 
@@ -179,7 +179,7 @@ def finalize(state: State, runtime: Runtime):
         }
 
 
-    if runtime.context.repeated_tool_call:
+    if runtime.context.repeated_tools:
 
         response = FinalResponse(
             answer=(
