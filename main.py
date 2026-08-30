@@ -29,6 +29,18 @@ from config import State,user_id,thread_id
 from dataclasses import dataclass,field
 
 import os
+import asyncio
+
+DB_UTL = os.getenv('DB_UTL')
+
+@dataclass
+class Context:
+    user_id: str
+    tool_call_history: list[dict] = field(default_factory=list)
+    repeated_tools: bool = False
+    num_iterations: int = 0
+    limit_reached: bool = False
+    retry_count: int = 0
 
 def display_event(event):
 
@@ -61,137 +73,137 @@ def display_event(event):
 
                 print(f"Tool Result: {message.content}")
 
-DB_UTL = os.getenv('DB_UTL')
+def build_graph(checkpointer,store):
 
-@dataclass
-class Context:
-    user_id: str
-    tool_call_history: list[dict] = field(default_factory=list)
-    repeated_tools: bool = False
-    num_iterations: int = 0
-    limit_reached: bool = False
-    retry_count: int = 0
+    builder = StateGraph(State)
 
-builder = StateGraph(State)
+    builder.add_node('agent',agent)
+    tool_node = ToolNode([
+        get_weather,
+        calculator,
+        search_web,
+        send_mail
+    ],
+    handle_tool_errors = handle_tool_error
+    )
+    builder.add_node('approval',human_approval)
+    builder.add_node('tool',tool_node)
+    builder.add_node('final',finalize)
+    builder.add_node('memory',memory_extraction)
 
-builder.add_node('agent',agent)
-tool_node = ToolNode([
-    get_weather,
-    calculator,
-    search_web,
-    send_mail
-],
-handle_tool_errors = handle_tool_error
-)
-builder.add_node('approval',human_approval)
-builder.add_node('tool',tool_node)
-builder.add_node('final',finalize)
-builder.add_node('memory',memory_extraction)
-
-builder.add_edge(START,'agent')
-builder.add_conditional_edges(
-    'agent',
-    make_decision,
-    {
-        'final':'final',
-        'tool':'tool',
-        'approval' : 'approval'
-    }
-)
-builder.add_conditional_edges(
-    'approval',
-    check_approval,
-    {
-        'send' : 'tool',
-        'reject' : 'final'
-    }
-)
-builder.add_edge('final','memory')
-builder.add_edge('memory',END)
-builder.add_conditional_edges(
-    'tool',
-    handle_tool_result,
-    {
-        'agent' : 'agent',
-        'final' : 'final'
-    }
-)
-
-
-with PostgresStore.from_conn_string(DB_UTL) as store:
-
-
-    store.setup()
-
-    memories = store.search(
-        ('users',user_id)
+    builder.add_edge(START,'agent')
+    builder.add_conditional_edges(
+        'agent',
+        make_decision,
+        {
+            'final':'final',
+            'tool':'tool',
+            'approval' : 'approval'
+        }
+    )
+    builder.add_conditional_edges(
+        'approval',
+        check_approval,
+        {
+            'send' : 'tool',
+            'reject' : 'final'
+        }
+    )
+    builder.add_edge('final','memory')
+    builder.add_edge('memory',END)
+    builder.add_conditional_edges(
+        'tool',
+        handle_tool_result,
+        {
+            'agent' : 'agent',
+            'final' : 'final'
+        }
     )
 
-    for memory in memories:
-        print(memory.value)
+    return builder.compile(
+        checkpointer=checkpointer,
+        store=store
+    )
 
+async def main():
 
-    with SqliteSaver.from_conn_string("checkpoints.db") as checkpointer:
+    with PostgresStore.from_conn_string(DB_UTL) as store:
     
-        graph = builder.compile(
-            checkpointer=checkpointer,
-            store=store
-        )
+            store.setup()
     
-        config = {
-            "configurable": {
-                "thread_id": thread_id,
-                "user_id" : user_id
-            },
-            'recursion_limit' : 10
-        }
-    
-        while True:
+            memories = store.search(
+                    ('users',user_id)
+                )
             
-            query = input("\nAsk Anything (type 'exit' to quit): ")
+            for memory in memories:
+                print(memory.value)
+    
+            with SqliteSaver.from_conn_string('checkpoints.db') as checkpointer:
 
-            if query.lower() == "exit":
-                break
+                graph = build_graph(checkpointer,store)
 
-            context = Context(
-                user_id=user_id,
-            )
-
-            try:
-
-                result = None
-
-                for event in graph.stream(
-                    {
-                        'messages' : [
-                            ('user',query)
-                        ]
+                config = {
+                    "configurable": {
+                        "thread_id": thread_id,
+                        "user_id" : user_id
                     },
-                    config,
-                    context=context
-                ):
+                    'recursion_limit' : 10
+                }
+
+                while True:
+
+                    query = input("\nAsk Anything (type 'exit' to quit): ")
+
+                    if query.lower() == "exit":
+                        break
                     
-                    display_event(event)
+                    context = Context(
+                        user_id=user_id,
+                    )
 
-                state = graph.get_state(config)
-                result = state.values
-                if state.tasks:
-                
-                    answer = input("Approve this Email? ")
+                    try:
+                    
+                        result = None
 
-                    for event in graph.stream(
-                        Command(resume=answer),
-                        config,
-                        context=context
-                    ):
-                        display_event(event)
+                        async for event in graph.astream(
+                            {
+                                'messages' : [
+                                    ('user',query)
+                                ]
+                            },
+                            config,
+                            context=context
+                        ):
 
-                response = result["final_response"]
+                            display_event(event)
 
-                print(f"AI : {response['answer']}")
-                print(f"Tools used : {response['tools_used']}")
+                        state = graph.get_state(config)
+                        result = state.values
+                        if state.tasks:
+                        
+                            answer = input("Approve this Email? ")
 
-            except GraphRecursionError:
+                            async for event in graph.astream(
+                                Command(resume=answer),
+                                config,
+                                context=context
+                            ):
+                                display_event(event)
 
-                print("\nAI : I wasn't able to complete the request within")
-                print("     the allowed number of steps.")
+                        state = graph.get_state(config)
+                        result = state.values
+
+                        response = result["final_response"]
+
+                        print(f"AI : {response['answer']}")
+                        print(f"Tools used : {response['tools_used']}")
+
+                    except GraphRecursionError:
+                    
+                        print("\nAI : I wasn't able to complete the request within")
+                        print("     the allowed number of steps.")
+
+
+
+if __name__ == "main":
+    asyncio.run(main())               
