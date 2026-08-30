@@ -8,7 +8,7 @@ from config import State,FinalResponse,ToolError
 from langgraph.types import interrupt
 import os
 import uuid
-
+import asyncio
 from config import memory_extraction_llm,llm_with_structured_output,llm_with_tools,user_id,thread_id
 
 MAX_ITERATIONS = 5
@@ -102,13 +102,13 @@ def make_decision(state:State,runtime:Runtime):
         return 'tool'
 
 
-def agent(state: State, runtime: Runtime):
+async def agent(state: State, runtime: Runtime):
 
     runtime.context.num_iterations += 1
 
     user = runtime.context.user_id
 
-    memories = runtime.store.search(
+    memories = await runtime.store.asearch(
         ("users", user)
     )
 
@@ -130,7 +130,7 @@ def agent(state: State, runtime: Runtime):
         )
     ] + state["messages"]
 
-    response = llm_with_tools.invoke(messages)
+    response = await llm_with_tools.ainvoke(messages)
 
     history = runtime.context.tool_call_history
 
@@ -178,7 +178,7 @@ def agent(state: State, runtime: Runtime):
     }
 
     
-def finalize(state: State, runtime: Runtime):
+async def finalize(state: State, runtime: Runtime):
 
     if runtime.context.limit_reached:
 
@@ -235,7 +235,7 @@ def finalize(state: State, runtime: Runtime):
         )
     ]
 
-    response = llm_with_structured_output.invoke(messages)
+    response = await llm_with_structured_output.ainvoke(messages)
 
     return {
         "messages": [
@@ -282,7 +282,7 @@ def check_approval(state: State):
 
     return "reject"
 
-def memory_extraction(state:State,runtime:Runtime):
+async def memory_extraction(state:State,runtime:Runtime):
 
     processed = state.get("memory_processed", 0)
 
@@ -325,12 +325,12 @@ def memory_extraction(state:State,runtime:Runtime):
     {conversation}
     """
 
-    response = memory_extraction_llm.invoke(prompt)
+    response = await memory_extraction_llm.ainvoke(prompt)
 
     if response.should_store:
 
         for memory in response.memories:
-            runtime.store.put(
+            await runtime.store.aput(
                 ('users',runtime.context.user_id),
                 str(uuid.uuid4()),
                 {

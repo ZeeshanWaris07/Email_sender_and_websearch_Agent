@@ -130,7 +130,14 @@ async def main():
     with PostgresStore.from_conn_string(DB_UTL) as store:
     
             store.setup()
-    
+
+            print(type(store))
+
+            print("Search methods:")
+            print([method for method in dir(store) if "search" in method.lower()])
+            
+            print("Put methods:")
+            print([method for method in dir(store) if "put" in method.lower()])
             memories = store.search(
                     ('users',user_id)
                 )

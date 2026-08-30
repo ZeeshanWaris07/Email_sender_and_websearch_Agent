@@ -1,5 +1,5 @@
 from langchain.tools import tool
-from tavily import TavilyClient
+from tavily import AsyncTavilyClient
 
 from googleapiclient.discovery import build
 
@@ -14,6 +14,8 @@ import ast
 import requests
 import operator
 import os
+import asyncio
+import httpx
 import base64
 load_dotenv()
 
@@ -21,8 +23,8 @@ load_dotenv()
 
 
 
-tavily = TavilyClient(
-    api_key = os.getenv("TAVILY_API_KEY")
+tavily = AsyncTavilyClient(
+    api_key=os.getenv("TAVILY_API_KEY")
 )
 
 SCOPES = [
@@ -58,58 +60,64 @@ def get_creds():
     return creds
 
 
-
 @tool
-def get_weather(city: str):
+async def get_weather(city: str):
     """Get the current weather for a city."""
 
-    # 1. Geocode city
-    geo_response = requests.get(
-        "https://geocoding-api.open-meteo.com/v1/search",
-        params={
-            "name": city,
-            "count": 1,
-            "language": "en",
-            "format": "json"
+    async with httpx.AsyncClient() as client:
+
+        # 1. Geocode city
+        geo_response = await client.get(
+            "https://geocoding-api.open-meteo.com/v1/search",
+            params={
+                "name": city,
+                "count": 1,
+                "language": "en",
+                "format": "json"
+            }
+        )
+
+        geo_data = geo_response.json()
+
+        if "results" not in geo_data:
+            return f"Could not find the city {city}"
+
+        location = geo_data["results"][0]
+
+        latitude = location["latitude"]
+        longitude = location["longitude"]
+
+        # 2. Get weather
+        weather_response = await client.get(
+            "https://api.open-meteo.com/v1/forecast",
+            params={
+                "latitude": latitude,
+                "longitude": longitude,
+                "current": (
+                    "temperature_2m,"
+                    "relative_humidity_2m,"
+                    "wind_speed_10m"
+                )
+            }
+        )
+
+        weather_data = weather_response.json()
+
+        current = weather_data["current"]
+
+        return {
+            "city": city,
+            "temperature": current["temperature_2m"],
+            "humidity": current["relative_humidity_2m"],
+            "wind_speed": current["wind_speed_10m"]
         }
-    )
 
-    geo_data = geo_response.json()
-
-    if "results" not in geo_data:
-        return f"Could not find the city {city}"
-
-    location = geo_data["results"][0]
-
-    latitude = location["latitude"]
-    longitude = location["longitude"]
-
-    # 2. Get weather
-    weather_response = requests.get(
-        "https://api.open-meteo.com/v1/forecast",
-        params={
-            "latitude": latitude,
-            "longitude": longitude,
-            "current": "temperature_2m,relative_humidity_2m,wind_speed_10m"
-        }
-    )
-
-    weather_data = weather_response.json()
-
-    current = weather_data["current"]
-
-    return {
-        "city": city,
-        "temperature": current["temperature_2m"],
-        "humidity": current["relative_humidity_2m"],
-        "wind_speed": current["wind_speed_10m"]
-    }
 
 @tool
-def search_web(search_statement:str):
+async def search_web(search_statement:str):
     """Use this tool if you want to search anything from web"""
 
-    response = tavily.search(
+    response = await tavily.search(
         query = search_statement,
         max_results=5
     )
