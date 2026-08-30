@@ -182,7 +182,9 @@ def calculator(expression: str):
     return calculate(tree.body)
 
 
-def send_mail(session,to:str,subject:str,content:str):
+
+
+def send_mail(to:str,subject:str,content:str):
     """Sends an Email using Gmail"""
 
     message = EmailMessage()

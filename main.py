@@ -6,7 +6,7 @@ from langchain_core.messages import SystemMessage,AIMessage,HumanMessage
 from langchain.tools import tool
 from typing import Annotated,TypedDict
 from pydantic import BaseModel
-from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.types import Command
 from langgraph.store.postgres import PostgresStore
 from langgraph.errors import GraphRecursionError
@@ -145,7 +145,7 @@ async def main():
             for memory in memories:
                 print(memory.value)
     
-            with SqliteSaver.from_conn_string('checkpoints.db') as checkpointer:
+            async with AsyncSqliteSaver.from_conn_string('checkpoints.db') as checkpointer:
 
                 graph = build_graph(checkpointer,store)
 
@@ -184,7 +184,7 @@ async def main():
 
                             display_event(event)
 
-                        state = graph.get_state(config)
+                        state = await graph.aget_state(config)
                         result = state.values
                         if state.tasks:
                         
@@ -197,7 +197,7 @@ async def main():
                             ):
                                 display_event(event)
 
-                        state = graph.get_state(config)
+                        state = await graph.aget_state(config)
                         result = state.values
 
                         response = result["final_response"]
@@ -212,5 +212,5 @@ async def main():
 
 
 
-if __name__ == "main":
+if __name__ == "__main__":
     asyncio.run(main())               
